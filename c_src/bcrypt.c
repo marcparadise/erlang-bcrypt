@@ -63,7 +63,7 @@
 #define BCRYPT_BLOCKS 6		/* Ciphertext blocks */
 #define BCRYPT_MINROUNDS 16	/* we have log2(rounds) in salt */
 
-int bcrypt(char *, const char *, const char *);
+int bcrypt(char *, const char *, const size_t, const char *);
 void encode_salt(char *, u_int8_t *, u_int16_t, u_int8_t);
 
 static void encode_base64(u_int8_t *, u_int8_t *, u_int16_t);
@@ -143,7 +143,7 @@ encode_salt(char *salt, u_int8_t *csalt, u_int16_t clen, u_int8_t logr)
    i.e. $2$04$iwouldntknowwhattosayetKdJ6iFtacBqJdKe6aW7ou */
 
 int
-bcrypt(char * encrypted, const char *key, const char *salt)
+bcrypt(char * encrypted, const char *key, size_t len, const char *salt)
 {
 	blf_ctx state;
 	u_int32_t rounds, i, k;
@@ -166,6 +166,7 @@ bcrypt(char * encrypted, const char *key, const char *salt)
 	if (salt[1] != '$') {
 		 switch (salt[1]) {
 		 case 'a':
+		 case 'b':
 			 /* 'ab' should not yield the same as 'abab' */
 			 minor = salt[1];
 			 salt++;
@@ -200,7 +201,19 @@ bcrypt(char * encrypted, const char *key, const char *salt)
 	/* We dont want the base64 salt but the raw data */
 	decode_base64(csalt, BCRYPT_MAXSALT, (u_int8_t *) salt);
 	salt_len = BCRYPT_MAXSALT;
-	key_len = strlen(key) + (minor >= 'a' ? 1 : 0);
+	
+	if (minor == 'b') {
+	        // key data after 72 bytes is not used; explicit check to avoid truncation in cast
+	        if (len > 72) {
+	                key_len = 72;
+                } else {
+                        key_len = (u_int8_t)len;
+                }
+        } else {
+                key_len = strlen(key);
+        }
+        
+	key_len += minor >= 'a' ? 1 : 0;
 
 	/* Setting up S-Boxes and Subkeys */
 	Blowfish_initstate(&state);
